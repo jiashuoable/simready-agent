@@ -75,7 +75,31 @@ python feishu_watcher.py --dry-run    # 不真跑 pipeline
 - 把 USD/zip/report/report.md 拷贝到 `/root/simready_output/<request_id>/`
 - 用户可见路径全是 `simready_output/`，内部 `.openclaw/` 路径不外泄
 
-### 2.5 飞书消息推送（无凭据自动降级）✅
+### 2.5 VLM 物理推理 + 写 USD ✅（v1 范围内已落地）
+对应 PRD §4.3 的核心子集。文件：[vlm_physics.py](vlm_physics.py)
+
+**推理项（v1 实际实现）**：
+- `dimensions_m`：[x,y,z] 真实世界尺寸（米）—— 写为 USD customAttribute `vlm:dimensions_m`
+- `friction_static` / `friction_dynamic`：写为 `UsdPhysics.MaterialAPI` 标准属性
+- `material_hint`：材质标签（wood/metal/plastic/...）—— 写为 `vlm:material_hint`
+- `confidence` + `notes`：写为 `vlm:confidence` / `vlm:notes`
+
+**调用链**：
+1. pipeline 在 `validate_and_repair` 之后调 `infer_physics(image_path, bbox_size=...)`
+2. 调用火山方舟 `client.chat.completions.create` + 视觉模型（默认 `doubao-1-5-vision-pro-250328`，可经 `VLM_MODEL` 切）
+3. 收到 JSON 后通过 `_coerce_hints` 做范围裁剪与字段兜底
+4. `write_to_usd` 用 USD Python (`pxr`) 把摩擦写为 `UsdPhysics.MaterialAPI`，尺寸/材质/置信度写为 customAttribute
+5. 物理 hints 落盘 `<work_dir>/physics_hints.json`，pipeline 摘要里附 `physics` 节
+6. 飞书推送一条 `🧠 物理属性推理（VLM, confidence 0.xx）` 消息
+
+**降级**：`ARK_API_KEY` 缺失、`pxr` 不可用、模型返回非 JSON 等任一失败都返回 `DEFAULT_HINTS`（标 `source=default`），pipeline 继续走，不阻断。
+
+**与 PRD §4.3 的差距（v2 再补）**：
+- `mass_kg` / `restitution` / `collider_shape` / `rigid_body_mode` —— PRD 列了但 v1 没要，可在 hints 加字段、再透传到 simready_cli 后补
+- 没接 PRD §4.3.5 的 simready_cli `--mass/--friction-*` 透传链路（因为 simready CLI 没暴露这些参数）—— 当前是绕开 CLI 直接 `pxr` 写 USD attribute，等效但更轻
+- 默认模型用了火山豆包视觉（PRD §4.3.4 写的是 claude-sonnet-4-6）—— 跟用户在最新需求里确认过
+
+### 2.6 飞书消息推送（无凭据自动降级）✅
 - `FeishuNotifier` 在缺 token/receive_id 时自动 no-op，只打 stdout
 - 支持文本、卡片、文件三种发送方式
 - 用 `app_id + app_secret` 换 `tenant_access_token`，自动管理
@@ -112,20 +136,16 @@ if bbox:
 
 ## 4. 未实现（需要后续研发）
 
-### 4.1 VLM 物理属性补齐（最重要的缺口）❌
-对应 PRD §4.3 整节。当前状态：
+### 4.1 VLM 物理推理的扩展项 ⚠️ (v1 子集已实现，见 §2.5)
+当前 [vlm_physics.py](vlm_physics.py) 只覆盖了 PRD §4.3.3 表里的 5/10 个字段（dimensions / 静摩擦 / 动摩擦 / 材质 / confidence）。剩下的：
 
-- `opts["use_vlm_physics"]` 这个开关在 pipeline 入参里**只是个旗标**，run_pipeline 内**没有任何 Stage 处理它**
-- 没有 `stage_vlm_physics` 函数，没有 `physics_hints.json` 的生成代码
-- usd-simready-cli 透传 `--mass`/`--friction-static`/`--collider-shape` 这些参数的链路也没接上
-- 飞书消息序列里 PRD §4.3.6 那条 "🧠 物理属性推理" 消息**没有任何代码会发出来**
+- `mass_kg` —— 配合 SimReady reference 推荐可写 `physics:mass`
+- `restitution` —— 已经在 `write_to_usd` 写了 0.0 占位，需要做成真实推理
+- `collider_shape` (convexHull / convexDecomposition / triangleMesh ...) —— 影响碰撞精度
+- `rigid_body_mode` (dynamic / static / kinematic) —— 默认 dynamic，但桌子/地板这种应该 static
+- `category` —— 配合 SimReady reference json 做更精准的匹配
 
-**研发同学要做的**：
-1. 选 VLM（PRD 建议 claude-sonnet-4-6），写 prompt + 出参 JSON Schema
-2. 在 pipeline 主流程的 Seed3D 之后、validate_and_repair 之前插入 Stage B：读 image + USD，调 VLM，落 `<work_dir>/<request_id>/physics_hints.json`
-3. 把 hints 透传到 simready 修复阶段写入 USD attribute
-4. 失败时降级写静态默认值 + `degraded=true` 标记
-5. 推一条 "🧠 物理属性推理" 文本到飞书
+接的做法：在 `PhysicsHints` 加字段 + prompt 加约束 + `write_to_usd` 多写几条 attribute。
 
 ### 4.2 Sandbox / Isaac 预览链接 ❌
 对应 PRD §4.5 末尾 "Isaac 预览链接" 与 §3.飞书消息 #8。当前：

@@ -360,17 +360,51 @@ def run_pipeline(
             f"⏭ 已按配置跳过 SimReady 校验与修复。"
         )
 
+    # ── Stage B2: VLM physics inference + write USD attrs ─────────────
+    physics_section = None
+    if opts["use_vlm_physics"] and report and report.output_usdc:
+        from vlm_physics import infer_physics, write_to_usd, format_hints_text  # noqa: E402
+
+        notifier.notify("🧠 正在通过 VLM 推理物体真实尺寸 / 静摩擦 / 动摩擦...")
+        bbox = (report.summary or {}).get("bbox_size") if report else None
+        hints = infer_physics(image_path=image_path, bbox_size=bbox)
+        apply_result = write_to_usd(report.output_usdc, hints)
+        notifier.notify(format_hints_text(hints, apply_result))
+
+        # 落盘 physics_hints.json 到 work_dir，方便排障
+        try:
+            hints_json = Path(report.work_dir) / "physics_hints.json"
+            hints_json.write_text(
+                json.dumps(
+                    {"hints": hints.to_dict(), "apply": apply_result},
+                    indent=2, ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            print(f"[pipeline] failed to write physics_hints.json: {e}")
+
+        physics_section = {
+            "source": hints.source,
+            "degraded": hints.source != "vlm",
+            "hints": hints.to_dict(),
+            "apply": apply_result,
+        }
+
     # ── Stage C: stage public output and deliver ───────────────────
     overall_status = report.overall_status if report else "ok"
     report_md = (
         build_report_markdown(report, seed_elapsed, repair_elapsed)
         if report else None
     )
+    report_obj = report.to_dict() if report else {"status": "ok", "skipped": "repair"}
+    if physics_section is not None:
+        report_obj["physics"] = physics_section
     public = stage_public_output(
         request_id=request_id,
         zip_path=zip_path,
         output_usdc=(report.output_usdc if report else None),
-        report_obj=(report.to_dict() if report else {"status": "ok", "skipped": "repair"}),
+        report_obj=report_obj,
         report_md=report_md,
     )
 
