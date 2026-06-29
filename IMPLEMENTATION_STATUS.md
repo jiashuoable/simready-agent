@@ -104,7 +104,7 @@ python feishu_watcher.py --dry-run    # 不真跑 pipeline
 - 支持文本、卡片、文件三种发送方式
 - 用 `app_id + app_secret` 换 `tenant_access_token`，自动管理
 
-### 2.6 报告渲染 ✅
+### 2.7 报告渲染 ✅
 - `format_diagnosis_text` / `format_issues_text` / `format_report_text`：把 PipelineReport 渲成飞书可读文本
 - `build_report_markdown`：生成 report.md（诊断 + 修复计划 + 关键参数 + 工件清单）
 
@@ -207,7 +207,7 @@ python pipeline.py /path/to/image.jpg --request-id demo-001
 | 优先级 | 任务 | 工期估 | 备注 |
 |---|---|---|---|
 | P0 | 配置卡片 callback 落地（§3.1） | 2-3 天 | 不接通 → 三个开关全是摆设 |
-| P0 | VLM 物理推理 Stage B（§4.1） | 3-4 天 | PRD 的 v1 关键卖点 |
+| P1 | VLM 物理推理扩展项（§4.1） | 2 天 | 加 mass / restitution / collider_shape 等 |
 | P1 | 修复 bbox 硬编码（§3.2） | 30 分钟 | 一行的事 |
 | P1 | 任务持久化文件流（§4.3） | 1-2 天 | 配套卡片回调一起做更顺 |
 | P2 | Sandbox / Isaac 预览（§4.2） | 看接口 | 跟火山平台联调 |
