@@ -1,0 +1,37 @@
+# Secrets / local config
+.env
+.env.local
+*.secret
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Seed3D runtime artifacts (大量 zip / 解压目录)
+seed3D/workspace/
+seed3D/output/
+seed3D/usd/generated_3d_*.zip
+seed3D/usd/pbr/
+seed3D/usd/pbr*[0-9]/
+seed3D/inbound/processed/
+seed3D/inbound/*.jsonl
+seed3D/inbound/.queue.lock
+
+# Pipeline runtime
+/tmp/simready_pending/
+watcher.log
+*.log
+
+# Local backups
+.backup_*/
+*.tar.gz

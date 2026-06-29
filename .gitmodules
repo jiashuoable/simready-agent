@@ -1,0 +1,9 @@
+[submodule "content-agents"]
+	path = content-agents
+	url = https://github.com/NVIDIA-Omniverse/content-agents.git
+[submodule "omni-asset-cli"]
+	path = omni-asset-cli
+	url = https://github.com/songshen06/omni-asset-cli.git
+[submodule "usd-simready-inspector"]
+	path = usd-simready-inspector
+	url = https://github.com/songshen06/usd-simready-inspector.git
